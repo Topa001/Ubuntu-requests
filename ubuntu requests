@@ -1,0 +1,80 @@
+import requests
+import os
+import hashlib
+from urllib.parse import urlparse
+from datetime import datetime
+
+def get_filename_from_url(url):
+    parsed = urlparse(url)
+    filename = os.path.basename(parsed.path)
+    if not filename or "." not in filename:
+        filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+    return filename
+
+def is_duplicate(file_path, content_hash):
+    # Check if the image already exists (by comparing hashes)
+    for existing_file in os.listdir("Fetched_Images"):
+        full_path = os.path.join("Fetched_Images", existing_file)
+        if os.path.isfile(full_path):
+            with open(full_path, "rb") as f:
+                if hashlib.md5(f.read()).hexdigest() == content_hash:
+                    return True
+    return False
+
+def safe_download_image(url):
+    try:
+        response = requests.get(url, timeout=10, stream=True)
+        response.raise_for_status()
+
+        # Basic security check: ensure content-type is an image
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            print(f"⚠️  Skipping {url} — Not an image (Content-Type: {content_type})")
+            return
+
+        # Get filename and image content
+        filename = get_filename_from_url(url)
+        file_path = os.path.join("Fetched_Images", filename)
+        content = response.content
+        file_hash = hashlib.md5(content).hexdigest()
+
+        # Prevent duplicate download
+        if is_duplicate(file_path, file_hash):
+            print(f"⏩ Duplicate image skipped: {filename}")
+            return
+
+        # Save the image
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        size_kb = round(len(content) / 1024, 2)
+        print(f"✅ Saved {filename} ({size_kb} KB)")
+
+    except requests.exceptions.MissingSchema:
+        print(f"❌ Invalid URL: {url}")
+    except requests.exceptions.ConnectionError:
+        print(f"❌ Connection error for {url}")
+    except requests.exceptions.Timeout:
+        print(f"❌ Timeout fetching {url}")
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ HTTP error for {url}: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected error for {url}: {e}")
+
+def main():
+    print("🌍 Ubuntu Multi Image Fetcher")
+    print("A mindful tool for safe and respectful web image collection\n")
+
+    # Create directory
+    os.makedirs("Fetched_Images", exist_ok=True)
+
+    # Get multiple URLs (space or comma separated)
+    urls = input("Enter image URLs separated by spaces or commas:\n> ").replace(",", " ").split()
+
+    for url in urls:
+        safe_download_image(url.strip())
+
+    print("\n💚 All tasks complete. Community enriched through mindful sharing.")
+
+if __name__ == "__main__":
+    main()
